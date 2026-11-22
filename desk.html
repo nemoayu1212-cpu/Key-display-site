@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>フルキーボードモニター（JIS 109）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    background: #0f111a;
+    color: #e2e8f0;
+    user-select: none;
+  }
+  .kb {
+    background: #1e2230;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid #2d3348;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .deck, .num-wrap { display: flex; gap: 16px; }
+  .num-wrap { gap: 6px; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; gap: 6px; }
+  .k {
+    background: #282c3f;
+    color: #cbd5e1;
+    height: 42px;
+    width: 42px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    box-shadow: 0 3px 0 #13151f;
+    transition: 0.04s;
+    position: relative;
+  }
+  .k.active {
+    background: #38bdf8;
+    color: #0f172a;
+    transform: translateY(3px);
+    box-shadow: 0 0 14px #38bdf8;
+  }
+  .sp { height: 42px; width: 42px; visibility: hidden; }
+  .w125 { width: 54px; }
+  .w150 { width: 66px; }
+  .w175 { width: 78px; }
+  .w200 { width: 90px; }
+  .w225 { width: 102px; }
+  .wsp  { width: 198px; }
+  .h200 { height: 90px; }
+  .ent-t { width: 66px; border-bottom-right-radius: 0; }
+  .ent-b { width: 54px; border-top-left-radius: 0; border-top-right-radius: 0; }
+  .ent-t::after {
+    content: ''; position: absolute; right: 0; bottom: -9px;
+    width: 54px; height: 9px; background: inherit; z-index: 1;
+  }
+  #st {
+    margin-top: 18px; padding: 8px 18px; background: #171a24;
+    border: 1px solid #2d3348; border-radius: 8px; font-size: 0.9rem;
+  }
+  #st span { color: #38bdf8; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="kb" id="kb"></div>
+<div id="st">押下中: <span>なし</span></div>
+
+<script>
+const topMain = [
+  [['Esc','Escape']],
+  [['F1','F1'],['F2','F2'],['F3','F3'],['F4','F4']],
+  [['F5','F5'],['F6','F6'],['F7','F7'],['F8','F8']],
+  [['F9','F9'],['F10','F10'],['F11','F11'],['F12','F12']]
+];
+const topNav = [['PrtSc','PrintScreen'],['ScrLk','ScrollLock'],['Pause','Pause']];
+
+const mainRows = [
+  [['半/全','Backquote'],['1','Digit1'],['2','Digit2'],['3','Digit3'],['4','Digit4'],['5','Digit5'],['6','Digit6'],['7','Digit7'],['8','Digit8'],['9','Digit9'],['0','Digit0'],['-','Minus'],['^','Equal'],['¥','IntlYen'],['BS','Backspace']],
+  [['Tab','Tab','w150'],['Q','KeyQ'],['W','KeyW'],['E','KeyE'],['R','KeyR'],['T','KeyT'],['Y','KeyY'],['U','KeyU'],['I','KeyI'],['O','KeyO'],['P','KeyP'],['@','BracketLeft'],['[','BracketRight'],['Enter','Enter','ent-t']],
+  [['Caps','CapsLock','w175'],['A','KeyA'],['S','KeyS'],['D','KeyD'],['F','KeyF'],['G','KeyG'],['H','KeyH'],['J','KeyJ'],['K','KeyK'],['L','KeyL'],[';','Semicolon'],[':','Quote'],[']','Backslash'],['','Enter','ent-b']],
+  [['Shift','ShiftLeft','w225'],['Z','KeyZ'],['X','KeyX'],['C','KeyC'],['V','KeyV'],['B','KeyB'],['N','KeyN'],['M','KeyM'],[',','Comma'],['.','Period'],['/','Slash'],['\\','IntlRo'],['Shift','ShiftRight','w175']],
+  [['Ctrl','ControlLeft','w150'],['Win','MetaLeft','w125'],['Alt','AltLeft','w125'],['無変換','NonConvert','w125'],['Space','Space','wsp'],['変換','Convert','w125'],['かな','KanaMode','w125'],['Alt','AltRight'],['App','ContextMenu'],['Ctrl','ControlRight','w125']]
+];
+
+const navRows = [
+  [['Ins','Insert'],['Home','Home'],['PgUp','PageUp']],
+  [['Del','Delete'],['End','End'],['PgDn','PageDown']],
+  [['','sp']],
+  [['','sp'],['↑','ArrowUp'],['','sp']],
+  [['←','ArrowLeft'],['↓','ArrowDown'],['→','ArrowRight']]
+];
+
+const numMain = [
+  [['Num','NumLock'],['/','NumpadDivide'],['*','NumpadMultiply']],
+  [['7','Numpad7'],['8','Numpad8'],['9','Numpad9']],
+  [['4','Numpad4'],['5','Numpad5'],['6','Numpad6']],
+  [['1','Numpad1'],['2','Numpad2'],['3','Numpad3']],
+  [['0','Numpad0','w200'],['.','NumpadDecimal']]
+];
+const numSide = [['-','NumpadSubtract'],['+','NumpadAdd','h200'],['Enter','NumpadEnter','h200']];
+
+const mkKey = ([label, code, cls = '']) => 
+  code === 'sp' ? `<div class="sp"></div>` : `<div class="k ${cls}" data-code="${code}">${label}</div>`;
+const mkRow = keys => `<div class="row">${keys.map(mkKey).join('')}</div>`;
+
+document.getElementById('kb').innerHTML = `
+  <div class="deck">
+    <div class="row" style="width:714px;justify-content:space-between">${topMain.map(mkRow).join('')}</div>
+    ${mkRow(topNav)}
+  </div>
+  <div class="deck">
+    <div class="col">${mainRows.map(mkRow).join('')}</div>
+    <div class="col">${navRows.map(mkRow).join('')}</div>
+    <div class="num-wrap">
+      <div class="col">${numMain.map(mkRow).join('')}</div>
+      <div class="col">${numSide.map(mkKey).join('')}</div>
+    </div>
+  </div>
+`;
+
+const st = document.getElementById('st');
+const active = new Set();
+let capsTimer = null;
+
+// JIS配列のCapsLock/英数キーなどの特殊信号を正規化する関数
+function resolveCode(e) {
+  if (
+    e.code === 'CapsLock' ||
+    e.key === 'CapsLock' ||
+    e.key === 'Alphanumeric' ||
+    e.keyCode === 20 ||
+    e.keyCode === 240
+  ) {
+    return 'CapsLock';
+  }
+  if (e.keyCode === 243 || e.keyCode === 244) {
+    return 'Backquote'; // 半角/全角キーの環境依存コード対策
+  }
+  return e.code || e.key;
+}
+
+const update = () => {
+  st.innerHTML = active.size
+    ? `押下中 (${active.size}個): <span>${[...active].join(' + ')}</span>`
+    : '押下中: <span>なし</span>';
+};
+
+const releaseKey = (code) => {
+  document.querySelectorAll(`.k[data-code="${code}"]`).forEach(el => el.classList.remove('active'));
+  active.delete(code);
+  update();
+};
+
+window.addEventListener('keydown', e => {
+  e.preventDefault();
+  const code = resolveCode(e);
+
+  document.querySelectorAll(`.k[data-code="${code}"]`).forEach(el => el.classList.add('active'));
+  active.add(code);
+  update();
+
+  // Windows JIS環境でCapsLock単体押し時にkeyupが発生しない仕様への対策
+  if (code === 'CapsLock') {
+    clearTimeout(capsTimer);
+    capsTimer = setTimeout(() => releaseKey('CapsLock'), 220);
+  }
+});
+
+window.addEventListener('keyup', e => {
+  const code = resolveCode(e);
+  if (code === 'CapsLock') clearTimeout(capsTimer);
+  releaseKey(code);
+});
+
+window.addEventListener('blur', () => {
+  clearTimeout(capsTimer);
+  document.querySelectorAll('.k.active').forEach(el => el.classList.remove('active'));
+  active.clear();
+  update();
+});
+</script>
+</body>
+</html>
